@@ -38,29 +38,42 @@ async def download_tiktok(request: TikTokRequest):
 
             video_url = info.get('url')
             headers = info.get('http_headers', {})
-            title = info.get('title', 'tiktok_video')
+            title = info.get('title', 'TikTok Video')
+            author = info.get('uploader', 'Unknown Author')
+            description = info.get('description', 'No caption')
 
             if not video_url:
                 raise HTTPException(status_code=404, detail="Could not extract video URL. It might be a photo slideshow.")
 
+            # සිංහල අකුරු සහ emojis අයින් කරලා, ඉංග්‍රීසි අකුරු විතරක් තියාගන්නවා (Headers වලට දාන්න)
+            safe_title = title.encode('ascii', 'ignore').decode('ascii').strip() or "tiktok_video"
+            safe_author = author.encode('ascii', 'ignore').decode('ascii').strip() or "unknown_author"
+            safe_desc = description.encode('ascii', 'ignore').decode('ascii').strip() or "No caption"
+
+            # TikTok එකට යවන්න headers එකට User-Agent එකක් එකතු කරනවා (Block වෙන එක නවත්තන්න)
+            headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+
             async def video_stream():
                 async with httpx.AsyncClient() as client:
                     async with client.stream("GET", video_url, headers=headers) as response:
+                        # TikTok එකෙන් error එකක් ආවොත් ඒක handle කරනවා
+                        if response.status_code != 200:
+                            raise HTTPException(status_code=response.status_code, detail="TikTok blocked the download")
                         async for chunk in response.aiter_bytes():
                             yield chunk
 
-            # ⭐ මෙතන තමයි අලුතෙන් වෙනස් කළේ ⭐
-            # සිංහල අකුරු සහ emojis අයින් කරලා, ඉංග්‍රීසි අකුරු විතරක් තියාගන්නවා
-            safe_title = title.encode('ascii', 'ignore').decode('ascii').strip()
-            
-            # ඉංග්‍රීසි අකුරු කිසිවක් නැත්නම් ඩිෆෝල්ට් නමක් දානවා
-            if not safe_title:
-                safe_title = "tiktok_video"
+            # වීඩියෝ එකත් එක්කම Title, Author, Description ටිකත් Headers වලින් යවනවා
+            custom_headers = {
+                "Content-Disposition": f"attachment; filename={safe_title}.mp4",
+                "X-Video-Title": safe_title,
+                "X-Video-Author": safe_author,
+                "X-Video-Description": safe_desc
+            }
 
             return StreamingResponse(
                 video_stream(), 
                 media_type="video/mp4",
-                headers={"Content-Disposition": f"attachment; filename={safe_title}.mp4"}
+                headers=custom_headers
             )
 
     except Exception as e:
