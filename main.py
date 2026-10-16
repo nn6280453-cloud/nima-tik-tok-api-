@@ -49,8 +49,14 @@ async def download_tiktok(request: TikTokRequest):
                         async for chunk in response.aiter_bytes():
                             yield chunk
 
-            safe_title = "".join([c for c in title if c.isalpha() or c.isdigit() or c==' ' or c=='.']).rstrip()
+            # ⭐ මෙතන තමයි අලුතෙන් වෙනස් කළේ ⭐
+            # සිංහල අකුරු සහ emojis අයින් කරලා, ඉංග්‍රීසි අකුරු විතරක් තියාගන්නවා
+            safe_title = title.encode('ascii', 'ignore').decode('ascii').strip()
             
+            # ඉංග්‍රීසි අකුරු කිසිවක් නැත්නම් ඩිෆෝල්ට් නමක් දානවා
+            if not safe_title:
+                safe_title = "tiktok_video"
+
             return StreamingResponse(
                 video_stream(), 
                 media_type="video/mp4",
